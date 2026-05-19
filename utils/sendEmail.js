@@ -1,27 +1,32 @@
-const axios = require('axios');
+const nodemailer = require('nodemailer');
 require('dotenv').config();
 
 const sendEmail = async (options) => {
-    const BREVO_API_URL = 'https://api.brevo.com/v3/smtp/email';
-    // Remove any accidental quotes or whitespace
-    const API_KEY = process.env.SMTP_PASS ? process.env.SMTP_PASS.trim().replace(/^["']|["']$/g, '') : '';
+    const SMTP_HOST = process.env.SMTP_HOST || 'smtp-relay.brevo.com';
+    const SMTP_PORT = parseInt(process.env.SMTP_PORT) || 587;
+    const SMTP_USER = process.env.SMTP_USER;
+    const SMTP_PASS = process.env.SMTP_PASS ? process.env.SMTP_PASS.trim().replace(/^["']|["']$/g, '') : '';
 
-    if (!API_KEY) {
-        throw new Error('Brevo API Key (SMTP_PASS) is missing in environment variables');
+    if (!SMTP_USER || !SMTP_PASS) {
+        throw new Error('SMTP user or password (SMTP_USER/SMTP_PASS) is missing in environment variables');
     }
 
-    const data = {
-        sender: {
-            name: process.env.FROM_NAME || 'Trade Crypto',
-            email: process.env.FROM_EMAIL || 's.k.81@outlook.de'
+    const transporter = nodemailer.createTransport({
+        host: SMTP_HOST,
+        port: SMTP_PORT,
+        secure: SMTP_PORT === 465,
+        auth: {
+            user: SMTP_USER,
+            pass: SMTP_PASS,
         },
-        to: [{
-            email: options.email,
-            name: options.name || 'User'
-        }],
-        subject: options.subject,
-        htmlContent: '' // Will be set below
-    };
+        tls: {
+            rejectUnauthorized: false,
+            minVersion: 'TLSv1.2'
+        },
+        connectionTimeout: 25000,
+        greetingTimeout: 25000,
+        socketTimeout: 25000,
+    });
 
     const commonStyles = `
         font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
@@ -104,7 +109,7 @@ const sendEmail = async (options) => {
             content = options.html || `<p>${options.message}</p>`;
     }
 
-    data.htmlContent = `
+    const htmlContent = `
         <!DOCTYPE html>
         <html>
         <head>
@@ -130,19 +135,20 @@ const sendEmail = async (options) => {
         </html>
     `;
 
+    const mailOptions = {
+        from: `"${process.env.FROM_NAME || 'Trade Crypto'}" <${SMTP_USER}>`,
+        to: options.email,
+        subject: options.subject,
+        html: htmlContent
+    };
+
     try {
-        console.log('Attempting to send email via Brevo API...');
-        const response = await axios.post(BREVO_API_URL, data, {
-            headers: {
-                'api-key': API_KEY,
-                'Content-Type': 'application/json',
-                'accept': 'application/json'
-            }
-        });
-        console.log('Email sent successfully via API:', response.data.messageId);
-        return response.data;
+        console.log('Attempting to send email via SMTP...');
+        const info = await transporter.sendMail(mailOptions);
+        console.log('Email sent successfully via SMTP:', info.messageId);
+        return info;
     } catch (error) {
-        console.error('Email delivery failed via API:', error.response?.data || error.message);
+        console.error('Email delivery failed via SMTP:', error.message);
         throw error;
     }
 };

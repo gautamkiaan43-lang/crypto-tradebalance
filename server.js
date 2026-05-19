@@ -99,6 +99,16 @@ app.use(errorHandler);
 
 const PORT = process.env.PORT || 5000;
 
-httpServer.listen(PORT, () => {
-    console.log(`Server running on port ${PORT}`);
+const runMigration = require('./config/migrate');
+
+runMigration().then(() => {
+    httpServer.listen(PORT, () => {
+        console.log(`Server running on port ${PORT}`);
+    });
+}).catch(err => {
+    console.error('Migration failed, but starting server anyway:', err);
+    httpServer.listen(PORT, () => {
+        console.log(`Server running on port ${PORT}`);
+    });
 });
+
