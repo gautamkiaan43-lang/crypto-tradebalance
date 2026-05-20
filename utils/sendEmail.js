@@ -111,6 +111,63 @@ const sendEmail = async (options) => {
             `;
             break;
 
+        case 'PRE_REGISTER':
+            content = `
+                <div style="${headerStyle}">
+                    <h1 style="color: #c9a227; text-transform: uppercase; letter-spacing: 4px; font-size: 28px;">Pre-Launch Access</h1>
+                </div>
+                <div style="background-color: rgba(255,255,255,0.02); padding: 30px; border-radius: 16px; text-align: center;">
+                    <p style="font-size: 16px; color: rgba(255,255,255,0.8); text-align: left;">Hello ${options.name || 'User'},</p>
+                    <p style="font-size: 14px; line-height: 1.8; color: rgba(255,255,255,0.6); text-align: left;">
+                        Thank you for registering for the exclusive Trade Crypto Pre-Launch! We are excited to welcome you to our professional community.
+                    </p>
+                    <p style="font-size: 14px; line-height: 1.8; color: rgba(255,255,255,0.6); text-align: left;">
+                        To secure your position in the protocol, please click the button below to set up your secure access password.
+                    </p>
+                    <a href="${process.env.FRONTEND_URL || 'https://tradebalance.de'}/setup-password?email=${encodeURIComponent(options.email)}&token=${options.otp}" style="${buttonStyle}">Complete Registration & Set Password</a>
+                    <p style="font-size: 12px; color: rgba(255,255,255,0.4); margin-top: 20px;">If the button above does not work, copy and paste this URL into your browser:</p>
+                    <p style="font-size: 11px; color: #c9a227; word-break: break-all;">
+                        ${process.env.FRONTEND_URL || 'https://tradebalance.de'}/setup-password?email=${encodeURIComponent(options.email)}&token=${options.otp}
+                    </p>
+                </div>
+            `;
+            break;
+
+        case 'ADMIN_NOTIFICATION':
+            content = `
+                <div style="${headerStyle}">
+                    <h1 style="color: #c9a227; text-transform: uppercase; letter-spacing: 4px; font-size: 24px;">New Registration Alert</h1>
+                </div>
+                <div style="background-color: rgba(255,255,255,0.02); padding: 30px; border-radius: 16px;">
+                    <p style="font-size: 16px; color: rgba(255,255,255,0.8);">Hello Administrator,</p>
+                    <p style="font-size: 14px; line-height: 1.8; color: rgba(255,255,255,0.6);">
+                        A new user has initialized their registration from the landing page. Here are the credentials received:
+                    </p>
+                    <div style="background: rgba(255, 255, 255, 0.05); padding: 20px; border-radius: 12px; margin: 20px 0; border-left: 4px solid #c9a227;">
+                        <table style="width: 100%; border-collapse: collapse; color: rgba(255, 255, 255, 0.8); font-size: 14px;">
+                            <tr>
+                                <td style="padding: 6px 0; font-weight: bold; width: 35%;">Full Name:</td>
+                                <td style="padding: 6px 0;">${options.name}</td>
+                            </tr>
+                            <tr>
+                                <td style="padding: 6px 0; font-weight: bold;">Email:</td>
+                                <td style="padding: 6px 0; color: #c9a227;">${options.email}</td>
+                            </tr>
+                            <tr>
+                                <td style="padding: 6px 0; font-weight: bold;">Status:</td>
+                                <td style="padding: 6px 0;"><span style="color: #ffaa00; background: rgba(255,170,0,0.1); padding: 2px 8px; border-radius: 4px; font-size: 11px; text-transform: uppercase;">Password Pending</span></td>
+                            </tr>
+                            <tr>
+                                <td style="padding: 6px 0; font-weight: bold;">Platform:</td>
+                                <td style="padding: 6px 0;">Landing Page Pre-Launch Form</td>
+                            </tr>
+                        </table>
+                    </div>
+                    <p style="font-size: 12px; color: rgba(255,255,255,0.4);">This is an automated system notification for security logging purposes.</p>
+                </div>
+            `;
+            break;
+
         default:
             content = options.html || `<p>${options.message}</p>`;
     }

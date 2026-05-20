@@ -366,6 +366,160 @@ const changePassword = async (req, res) => {
     }
 };
 
+// @desc    Pre-register a new user from Landing Page
+// @route   POST /api/pre-register
+// @access  Public
+const preRegister = async (req, res) => {
+    const { full_name, email } = req.body;
+
+    if (!full_name || !email) {
+        return res.status(400).json({ message: 'Please provide all required fields' });
+    }
+
+    try {
+        // 1. Check if user already exists
+        const [existingUsers] = await pool.execute('SELECT id, is_verified FROM users WHERE email = ?', [email]);
+        
+        const otp = generateOtp();
+        const otpExpiry = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours expiry for pre-registration password setup
+
+        if (existingUsers.length > 0) {
+            const user = existingUsers[0];
+            if (user.is_verified) {
+                return res.status(400).json({ message: 'This email is already registered and verified.' });
+            }
+            
+            // If they registered before but are not verified/didn't set password, update their OTP
+            await pool.execute(
+                'UPDATE users SET full_name = ?, otp = ?, otp_expiry = ? WHERE id = ?',
+                [full_name, otp, otpExpiry, user.id]
+            );
+        } else {
+            // Create user with a dummy/temporary password hash since password is NOT NULL in database schema
+            const dummyPassword = await bcrypt.hash('PRELAUNCH_TEMP_PASS_' + Math.random().toString(36).slice(-8), 12);
+            await pool.execute(
+                'INSERT INTO users (full_name, email, password, is_verified, role, sponsor_id, otp, otp_expiry) VALUES (?, ?, ?, FALSE, "user", "SYSTEM", ?, ?)',
+                [full_name, email, dummyPassword, otp, otpExpiry]
+            );
+        }
+
+        // 2. Send Pre-Register setup email to User
+        console.log('Attempting to send pre-launch registration setup email to:', email);
+        try {
+            await sendEmail({
+                email,
+                subject: 'Complete Registration - Trade Crypto Pre-Launch',
+                template: 'PRE_REGISTER',
+                name: full_name,
+                otp
+            });
+        } catch (mailError) {
+            console.error('Email delivery failed to user:', mailError);
+            throw mailError;
+        }
+
+        // 3. Send Notification to Admin
+        console.log('Attempting to send registration notification to admin...');
+        try {
+            // Fetch all admin emails from database
+            const [admins] = await pool.execute('SELECT email FROM users WHERE role = "admin"');
+            
+            // Collect all admin emails, also add FROM_EMAIL as fallback/default
+            const adminEmails = new Set();
+            if (process.env.FROM_EMAIL) {
+                adminEmails.add(process.env.FROM_EMAIL.trim());
+            }
+            admins.forEach(adm => adminEmails.add(adm.email.trim()));
+
+            // Send to each admin email
+            for (const adminEmail of adminEmails) {
+                await sendEmail({
+                    email: adminEmail,
+                    subject: `[New Registration] - ${full_name} has pre-registered`,
+                    template: 'ADMIN_NOTIFICATION',
+                    name: full_name,
+                    emailData: email,
+                    otp: ''
+                });
+            }
+        } catch (adminMailError) {
+            console.error('Admin notification email failed (non-blocking):', adminMailError);
+            // Don't crash the request if admin email fails
+        }
+
+        res.status(201).json({
+            message: 'Registration initialized. Please check your email to set up your password and complete registration.',
+            email
+        });
+
+    } catch (error) {
+        console.error('PRE_REGISTRATION_ERROR:', error);
+        res.status(500).json({ 
+            message: 'Failed to initialize registration', 
+            error: error.message
+        });
+    }
+};
+
+// @desc    Setup Password for pre-registered user
+// @route   POST /api/setup-password
+// @access  Public
+const setupPassword = async (req, res) => {
+    const { email, token, password } = req.body;
+
+    if (!email || !token || !password) {
+        return res.status(400).json({ message: 'Missing credentials' });
+    }
+
+    try {
+        const [users] = await pool.execute(
+            'SELECT id, full_name, otp, otp_expiry, is_verified FROM users WHERE email = ?',
+            [email]
+        );
+
+        if (users.length === 0) {
+            return res.status(404).json({ message: 'User not found' });
+        }
+
+        const user = users[0];
+
+        if (user.is_verified) {
+            return res.status(400).json({ message: 'Account is already verified and active.' });
+        }
+
+        // Validate Token/OTP
+        if (user.otp !== token) {
+            return res.status(400).json({ message: 'Invalid or expired setup token' });
+        }
+
+        // Check Expiry
+        if (new Date() > new Date(user.otp_expiry)) {
+            return res.status(400).json({ message: 'Registration setup token has expired. Please register again.' });
+        }
+
+        // Hash and Update Password, set verified to true
+        const hashedPassword = await bcrypt.hash(password, 12);
+        await pool.execute(
+            'UPDATE users SET password = ?, is_verified = TRUE, otp = NULL, otp_expiry = NULL WHERE id = ?',
+            [hashedPassword, user.id]
+        );
+
+        // Send Welcome/Confirmation Email
+        await sendEmail({
+            email,
+            subject: 'Account Active - Welcome to Trade Crypto',
+            template: 'PASSWORD_CHANGED', // re-use password changed template which says "Access Dashboard"
+            name: user.full_name
+        });
+
+        res.json({ message: 'Account completed successfully. You can now login.' });
+
+    } catch (error) {
+        console.error('SETUP_PASSWORD_ERROR:', error);
+        res.status(500).json({ message: 'Failed to complete registration password setup' });
+    }
+};
+
 module.exports = {
     register,
     verifyOtp,
@@ -374,5 +528,7 @@ module.exports = {
     forgotPassword,
     resetPassword,
     changePassword,
-    getProfile
+    getProfile,
+    preRegister,
+    setupPassword
 };
