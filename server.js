@@ -42,7 +42,31 @@ const limiter = rateLimit({
 });
 app.use('/api/', limiter);
 const path = require('path');
-app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+const fs = require('fs');
+const uploadDir = path.join(process.cwd(), 'uploads');
+
+// Ensure uploads directory auto-creates on server startup
+if (!fs.existsSync(uploadDir)) {
+    fs.mkdirSync(uploadDir, { recursive: true });
+}
+
+// Check if file exists before downloading/serving
+app.use('/uploads/:filename', (req, res, next) => {
+    const filePath = path.join(uploadDir, req.params.filename);
+    
+    if (!fs.existsSync(filePath)) {
+        console.error("PDF Download Error: File not found at", filePath);
+        return res.status(404).json({
+            success: false,
+            message: "PDF file not found"
+        });
+    }
+    
+    console.log("Serving PDF Path:", filePath);
+    next();
+});
+
+app.use('/uploads', express.static(uploadDir));
 
 // Socket.io Logic
 io.on('connection', (socket) => {
