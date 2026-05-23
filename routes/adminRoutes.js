@@ -1,5 +1,5 @@
 const express = require('express');
-const { getAllUsers, getAdminStats, updateUserStatus, getAdminEarnings, updateWithdrawalStatus, updateAdminProfile } = require('../controllers/adminController');
+const { getAllUsers, getAdminStats, updateUserStatus, getAdminEarnings, updateWithdrawalStatus, updateAdminProfile, getNetworkTree } = require('../controllers/adminController');
 const { getDownloads, uploadDownload, deleteDownload } = require('../controllers/downloadController');
 const { getActiveConversations, getChatHistory } = require('../controllers/chatController');
 const { protect, admin } = require('../middleware/authMiddleware');
@@ -28,6 +28,7 @@ const upload = multer({ storage });
 
 router.get('/users', protect, admin, getAllUsers);
 router.get('/stats', protect, admin, getAdminStats);
+router.get('/network-tree', protect, admin, getNetworkTree);
 router.put('/users/:id/status', protect, admin, updateUserStatus);
 router.get('/earnings', protect, admin, getAdminEarnings);
 router.put('/withdrawals/:id/status', protect, admin, updateWithdrawalStatus);
