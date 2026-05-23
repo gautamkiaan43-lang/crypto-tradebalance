@@ -6,7 +6,7 @@ const pool = require('../config/db');
 const getUserProfile = async (req, res) => {
     try {
         const [users] = await pool.execute(
-            'SELECT id, full_name, email, is_verified, created_at FROM users WHERE id = ?',
+            'SELECT id, full_name, email, is_verified, referral_code, created_at FROM users WHERE id = ?',
             [req.user.id]
         );
 
@@ -26,21 +26,27 @@ const getUserProfile = async (req, res) => {
 // @access  Private
 const getUserStats = async (req, res) => {
     try {
-        const userRefId = `TB-${req.user.id.toString().padStart(5, '0')}`;
-        const [referrals] = await pool.execute(
-            'SELECT COUNT(*) as count FROM users WHERE sponsor_id = ?',
-            [userRefId]
-        );
+        const [userRows] = await pool.execute('SELECT id, referral_code, wallet_balance FROM users WHERE id = ?', [req.user.id]);
+        if (userRows.length === 0) return res.status(404).json({ message: 'User not found' });
+        const user = userRows[0];
+        
+        const code1 = user.referral_code || '';
+        const code2 = `TB-MEMBER-${user.id}`;
+        const code3 = `TB-${user.id.toString().padStart(5, '0')}`;
 
-        const [userData] = await pool.execute(
-            'SELECT wallet_balance FROM users WHERE id = ?',
-            [req.user.id]
+        const [referrals] = await pool.execute(
+            `SELECT 
+                COUNT(*) as count,
+                SUM(CASE WHEN is_verified = 1 THEN 1 ELSE 0 END) as active_count
+             FROM users 
+             WHERE sponsor_id IN (?, ?, ?)`,
+            [code1, code2, code3]
         );
 
         res.json({
-            totalEarnings: userData[0].wallet_balance || "0.00",
-            referralCount: referrals[0].count,
-            activeNodes: referrals[0].count, // Assuming all referrals are active for now
+            totalEarnings: user.wallet_balance || "0.00",
+            referralCount: referrals[0].count || 0,
+            activeNodes: referrals[0].active_count || 0,
             networkGrowth: "+0%"
         });
     } catch (error) {
@@ -72,10 +78,17 @@ const getUserEarnings = async (req, res) => {
 };
 const getUserNetwork = async (req, res) => {
     try {
-        const userRefId = `TB-${req.user.id.toString().padStart(5, '0')}`;
+        const [userRows] = await pool.execute('SELECT id, referral_code FROM users WHERE id = ?', [req.user.id]);
+        if (userRows.length === 0) return res.status(404).json({ message: 'User not found' });
+        const user = userRows[0];
+        
+        const code1 = user.referral_code || '';
+        const code2 = `TB-MEMBER-${user.id}`;
+        const code3 = `TB-${user.id.toString().padStart(5, '0')}`;
+
         const [referrals] = await pool.execute(
-            'SELECT id, full_name, email, is_verified, created_at FROM users WHERE sponsor_id = ? ORDER BY created_at DESC',
-            [userRefId]
+            'SELECT id, full_name, email, is_verified, created_at FROM users WHERE sponsor_id IN (?, ?, ?) ORDER BY created_at DESC',
+            [code1, code2, code3]
         );
         res.json(referrals);
     } catch (error) {

@@ -34,33 +34,37 @@ const validateReferralCode = async (req, res) => {
 // @access  Private
 const getReferralStats = async (req, res) => {
     try {
+        const [userRows] = await pool.execute('SELECT id, referral_code FROM users WHERE id = ?', [req.user.id]);
+        const user = userRows[0];
+        const code1 = user.referral_code || '';
+        const code2 = `TB-MEMBER-${user.id}`;
+        const code3 = `TB-${user.id.toString().padStart(5, '0')}`;
+
         // Get stats counts
         const [counts] = await pool.execute(
             `SELECT 
                 COUNT(*) as total_referrals,
-                SUM(CASE WHEN u.is_verified = 1 THEN 1 ELSE 0 END) as active_referrals
-             FROM referrals r
-             JOIN users u ON r.referred_user_id = u.id
-             WHERE r.referrer_user_id = ?`,
-            [req.user.id]
+                SUM(CASE WHEN is_verified = 1 THEN 1 ELSE 0 END) as active_referrals
+             FROM users
+             WHERE sponsor_id IN (?, ?, ?)`,
+            [code1, code2, code3]
         );
 
         // Get full members list
         const [members] = await pool.execute(
             `SELECT 
-                u.id,
-                u.full_name,
-                u.email,
-                u.referral_code,
-                u.is_verified,
-                u.created_at as joined_at,
-                r.status,
-                r.created_at as referred_at
-             FROM referrals r
-             JOIN users u ON r.referred_user_id = u.id
-             WHERE r.referrer_user_id = ?
-             ORDER BY r.created_at DESC`,
-            [req.user.id]
+                id,
+                full_name,
+                email,
+                referral_code,
+                is_verified,
+                created_at as joined_at,
+                IF(is_verified, 'Active', 'Pending') as status,
+                created_at as referred_at
+             FROM users
+             WHERE sponsor_id IN (?, ?, ?)
+             ORDER BY created_at DESC`,
+            [code1, code2, code3]
         );
 
         const totalReferrals = Number(counts[0].total_referrals) || 0;
@@ -84,13 +88,18 @@ const getReferralStats = async (req, res) => {
 // @access  Private
 const getMyNetwork = async (req, res) => {
     try {
+        const [userRows] = await pool.execute('SELECT id, referral_code FROM users WHERE id = ?', [req.user.id]);
+        const user = userRows[0];
+        const code1 = user.referral_code || '';
+        const code2 = `TB-MEMBER-${user.id}`;
+        const code3 = `TB-${user.id.toString().padStart(5, '0')}`;
+
         const [network] = await pool.execute(`
-            SELECT u.id, u.full_name, u.email, u.referral_code, u.is_verified, r.status, r.created_at
-            FROM referrals r
-            JOIN users u ON r.referred_user_id = u.id
-            WHERE r.referrer_user_id = ?
-            ORDER BY r.created_at DESC
-        `, [req.user.id]);
+            SELECT id, full_name, email, referral_code, is_verified, IF(is_verified, 'Active', 'Pending') as status, created_at
+            FROM users
+            WHERE sponsor_id IN (?, ?, ?)
+            ORDER BY created_at DESC
+        `, [code1, code2, code3]);
 
         res.json(network);
     } catch (error) {

@@ -64,10 +64,7 @@ const register = async (req, res) => {
             try {
                 const [sponsor] = await pool.execute('SELECT id, full_name, email FROM users WHERE referral_code = ? OR CONCAT("TB-MEMBER-", id) = ? OR CONCAT("TB-", LPAD(id, 5, "0")) = ?', [sponsor_id, sponsor_id, sponsor_id]);
                 if (sponsor.length > 0) {
-                    await pool.execute(
-                        'INSERT INTO referrals (referrer_user_id, referred_user_id, referral_code) VALUES (?, ?, ?)',
-                        [sponsor[0].id, userId, sponsor_id]
-                    );
+                    // We no longer insert into the referrals table since we query the users table directly using sponsor_id.
 
                     // Send NEW_REFERRAL email to sponsor (non-blocking)
                     sendEmail({
