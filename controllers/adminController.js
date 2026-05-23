@@ -148,8 +148,8 @@ const getNetworkTree = async (req, res) => {
         if (search) {
             // Find user by TB-ID or Name
             const [users] = await pool.execute(
-                "SELECT id, full_name, email, is_verified, created_at, status FROM users WHERE full_name LIKE ? OR CONCAT('TB-', LPAD(id, 5, '0')) = ?",
-                [`%${search}%`, search]
+                "SELECT id, full_name, email, is_verified, created_at, status FROM users WHERE full_name LIKE ? OR CONCAT('TB-', LPAD(id, 5, '0')) = ? OR CONCAT('TB-MEMBER-', id) = ? OR id = ?",
+                [`%${search}%`, search, search, search]
             );
             if (users.length > 0) {
                 rootUser = users[0];
@@ -159,26 +159,44 @@ const getNetworkTree = async (req, res) => {
         }
 
         // Logic for fetching levels
-        let currentLevelIds = rootUser ? [`TB-${rootUser.id.toString().padStart(5, '0')}`] : [];
-        
-        if (!rootUser) {
-             const [level1] = await pool.execute("SELECT id FROM users WHERE sponsor_id IS NULL OR sponsor_id = '' OR sponsor_id = 'admin' OR sponsor_id = 'TB-00000'");
-             currentLevelIds = level1.map(u => `TB-${u.id.toString().padStart(5, '0')}`);
+        let currentLevelIds = [];
+        let globalLevel1 = [];
+
+        if (rootUser) {
+             currentLevelIds = [
+                 `TB-${rootUser.id.toString().padStart(5, '0')}`,
+                 rootUser.id.toString(),
+                 `TB-MEMBER-${rootUser.id}`
+             ];
+        } else {
+             // Global Level 1: users sponsored by the system itself
+             const [level1] = await pool.execute("SELECT id FROM users WHERE sponsor_id IS NULL OR sponsor_id = '' OR sponsor_id = 'admin' OR sponsor_id = 'TB-00000' OR sponsor_id = 'SYSTEM'");
+             globalLevel1 = level1;
+             currentLevelIds = level1.flatMap(u => [
+                 `TB-${u.id.toString().padStart(5, '0')}`,
+                 u.id.toString(),
+                 `TB-MEMBER-${u.id}`
+             ]);
         }
 
         const levels = [];
         // Max 4 levels for the UI
         for (let i = 1; i <= 4; i++) {
-            if (currentLevelIds.length === 0) {
-                levels.push({ level: i, count: 0, growth: "+0%" });
-                continue;
-            }
+            let referrals = [];
 
-            const placeholders = currentLevelIds.map(() => '?').join(',');
-            const [referrals] = await pool.execute(
-                `SELECT id FROM users WHERE sponsor_id IN (${placeholders})`,
-                currentLevelIds
-            );
+            if (!rootUser && i === 1) {
+                // For Global Audit, Level 1 is already fetched
+                referrals = globalLevel1;
+            } else {
+                if (currentLevelIds.length > 0) {
+                    const placeholders = currentLevelIds.map(() => '?').join(',');
+                    const [res] = await pool.execute(
+                        `SELECT id FROM users WHERE sponsor_id IN (${placeholders})`,
+                        currentLevelIds
+                    );
+                    referrals = res;
+                }
+            }
 
             levels.push({
                 level: i,
@@ -186,7 +204,11 @@ const getNetworkTree = async (req, res) => {
                 growth: referrals.length > 0 ? "+Active" : "+0%"
             });
 
-            currentLevelIds = referrals.map(u => `TB-${u.id.toString().padStart(5, '0')}`);
+            currentLevelIds = referrals.flatMap(u => [
+                 `TB-${u.id.toString().padStart(5, '0')}`,
+                 u.id.toString(),
+                 `TB-MEMBER-${u.id}`
+            ]);
         }
 
         res.json({
