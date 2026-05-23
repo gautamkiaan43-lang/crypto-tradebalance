@@ -361,7 +361,16 @@ const getProfile = async (req, res) => {
             return res.status(404).json({ message: 'User not found' });
         }
 
-        res.json(users[0]);
+        const user = users[0];
+
+        if (!user.referral_code) {
+            const namePart = (user.full_name.split(' ')[0] || '').replace(/[^a-zA-Z]/g, '').toUpperCase().substring(0, 6) || 'USER';
+            const newCode = `TB-${namePart}-${user.id.toString().padStart(3, '0')}`;
+            await pool.execute('UPDATE users SET referral_code = ? WHERE id = ?', [newCode, user.id]);
+            user.referral_code = newCode;
+        }
+
+        res.json(user);
     } catch (error) {
         console.error('GET_PROFILE_ERROR:', error);
         res.status(500).json({ message: 'Failed to retrieve profile data' });
