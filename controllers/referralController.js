@@ -11,8 +11,8 @@ const validateReferralCode = async (req, res) => {
 
     try {
         const [users] = await pool.execute(
-            'SELECT id, full_name, email FROM users WHERE referral_code = ? OR CONCAT("TB-", LPAD(id, 5, "0")) = ?',
-            [code, code]
+            'SELECT id, full_name, email FROM users WHERE referral_code = ? OR CONCAT("TB-MEMBER-", id) = ? OR CONCAT("TB-", LPAD(id, 5, "0")) = ?',
+            [code, code, code]
         );
 
         if (users.length === 0) {
