@@ -35,12 +35,18 @@ app.use(express.urlencoded({ extended: true }));
 app.use(morgan('dev')); // Log requests to console
 
 // Rate Limiting
-const limiter = rateLimit({
+const authLimiter = rateLimit({
     windowMs: 15 * 60 * 1000, // 15 minutes
     max: 100, // Limit each IP to 100 requests per windowMs
     message: 'Too many requests from this IP, please try again after 15 minutes'
 });
-app.use('/api/', limiter);
+// Keep limiter on login/auth routes only
+app.use('/api/login', authLimiter);
+app.use('/api/register', authLimiter);
+app.use('/api/verify-otp', authLimiter);
+app.use('/api/resend-otp', authLimiter);
+app.use('/api/forgot-password', authLimiter);
+app.use('/api/reset-password', authLimiter);
 const path = require('path');
 const fs = require('fs');
 const uploadDir = path.join(process.cwd(), 'uploads');
