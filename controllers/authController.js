@@ -62,10 +62,30 @@ const register = async (req, res) => {
         // Map into referrals table if sponsor_id is valid and not SYSTEM
         if (sponsor_id && sponsor_id !== 'SYSTEM') {
             try {
-                const [sponsor] = await pool.execute('SELECT id, full_name, email FROM users WHERE referral_code = ? OR CONCAT("TB-MEMBER-", id) = ? OR CONCAT("TB-", LPAD(id, 5, "0")) = ?', [sponsor_id, sponsor_id, sponsor_id]);
-                if (sponsor.length > 0) {
-                    // We no longer insert into the referrals table since we query the users table directly using sponsor_id.
+                let sponsor = [];
+                const [directSponsors] = await pool.execute('SELECT id, full_name, email FROM users WHERE referral_code = ? OR CONCAT("TB-MEMBER-", id) = ? OR CONCAT("TB-", LPAD(id, 5, "0")) = ?', [sponsor_id, sponsor_id, sponsor_id]);
+                
+                if (directSponsors.length > 0) {
+                    sponsor = directSponsors;
+                } else {
+                    const parts = sponsor_id.split('-');
+                    if (parts.length === 3 && parts[0] === 'TB') {
+                        const possibleId = parseInt(parts[2], 10);
+                        if (!isNaN(possibleId)) {
+                            const [idUsers] = await pool.execute('SELECT id, full_name, email FROM users WHERE id = ?', [possibleId]);
+                            if (idUsers.length > 0) {
+                                const user = idUsers[0];
+                                const namePart = (user.full_name?.split(' ')[0] || '').replace(/[^a-zA-Z]/g, '').toUpperCase().substring(0, 6) || 'USER';
+                                const expectedCode = `TB-${namePart}-${user.id.toString().padStart(3, '0')}`;
+                                if (expectedCode === sponsor_id) {
+                                    sponsor = idUsers;
+                                }
+                            }
+                        }
+                    }
+                }
 
+                if (sponsor.length > 0) {
                     // Send NEW_REFERRAL email to sponsor (non-blocking)
                     sendEmail({
                         email: sponsor[0].email,
