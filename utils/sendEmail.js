@@ -168,6 +168,40 @@ const sendEmail = async (options) => {
             `;
             break;
 
+        case 'NEW_REFERRAL':
+            content = `
+                <div style="${headerStyle}">
+                    <h1 style="color: #c9a227; text-transform: uppercase; letter-spacing: 4px; font-size: 24px;">New Referral Joined</h1>
+                </div>
+                <div style="background-color: rgba(255,255,255,0.02); padding: 30px; border-radius: 16px;">
+                    <p style="font-size: 16px; color: rgba(255,255,255,0.8);">Hello ${options.name},</p>
+                    <p style="font-size: 14px; line-height: 1.8; color: rgba(255,255,255,0.6);">
+                        Great news! A new user has joined your network using your unique referral link.
+                    </p>
+                    <div style="background: rgba(255, 255, 255, 0.05); padding: 20px; border-radius: 12px; margin: 20px 0; border-left: 4px solid #c9a227;">
+                        <table style="width: 100%; border-collapse: collapse; color: rgba(255, 255, 255, 0.8); font-size: 14px;">
+                            <tr>
+                                <td style="padding: 6px 0; font-weight: bold; width: 35%;">User Name:</td>
+                                <td style="padding: 6px 0; color: #c9a227;">${options.emailData?.referredName || 'New Member'}</td>
+                            </tr>
+                            <tr>
+                                <td style="padding: 6px 0; font-weight: bold;">Joined Date:</td>
+                                <td style="padding: 6px 0;">${options.emailData?.joinedDate || new Date().toLocaleDateString()}</td>
+                            </tr>
+                            <tr>
+                                <td style="padding: 6px 0; font-weight: bold;">Status:</td>
+                                <td style="padding: 6px 0;"><span style="color: #00ff88; background: rgba(0,255,136,0.1); padding: 2px 8px; border-radius: 4px; font-size: 11px; text-transform: uppercase;">Active</span></td>
+                            </tr>
+                        </table>
+                    </div>
+                    <p style="font-size: 14px; line-height: 1.8; color: rgba(255,255,255,0.6);">
+                        You can track your network's growth and view your earnings directly from your referral dashboard.
+                    </p>
+                    <a href="${process.env.FRONTEND_URL || 'https://tradebalance.de'}/user/referral" style="${buttonStyle}">View Referral Dashboard</a>
+                </div>
+            `;
+            break;
+
         default:
             content = options.html || `<p>${options.message}</p>`;
     }

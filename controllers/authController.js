@@ -28,23 +28,62 @@ const register = async (req, res) => {
         const otpExpiry = new Date(Date.now() + 5 * 60 * 1000);
         const role = email.includes('admin') ? 'admin' : 'user';
 
+        let userId;
         if (existingUsers.length > 0) {
             const user = existingUsers[0];
             if (user.is_verified) {
                 return res.status(400).json({ message: 'Email already registered and verified' });
             }
             
+            userId = user.id;
             // If exists but not verified, update the existing record
             await pool.execute(
                 'UPDATE users SET full_name = ?, telegram_id = ?, password = ?, role = ?, sponsor_id = ?, phone = ?, otp = ?, otp_expiry = ? WHERE id = ?',
-                [full_name, username, hashedPassword, role, sponsor_id || 'SYSTEM', phone || null, otp, otpExpiry, user.id]
+                [full_name, username, hashedPassword, role, sponsor_id || 'SYSTEM', phone || null, otp, otpExpiry, userId]
             );
         } else {
             // 5. Create User (New)
-            await pool.execute(
+            const [result] = await pool.execute(
                 'INSERT INTO users (full_name, telegram_id, email, password, is_verified, role, sponsor_id, phone, otp, otp_expiry) VALUES (?, ?, ?, ?, FALSE, ?, ?, ?, ?, ?)',
                 [full_name, username, email, hashedPassword, role, sponsor_id || 'SYSTEM', phone || null, otp, otpExpiry]
             );
+            userId = result.insertId;
+        }
+
+        // Generate and update unique referral code
+        const randomString = Math.random().toString(36).substring(2, 5).toUpperCase();
+        const referralCode = `TB-${randomString}-${userId.toString().padStart(3, '0')}`;
+        
+        await pool.execute(
+            'UPDATE users SET referral_code = ?, referral_joined_at = CURRENT_TIMESTAMP WHERE id = ?',
+            [referralCode, userId]
+        );
+
+        // Map into referrals table if sponsor_id is valid and not SYSTEM
+        if (sponsor_id && sponsor_id !== 'SYSTEM') {
+            try {
+                const [sponsor] = await pool.execute('SELECT id, full_name, email FROM users WHERE referral_code = ? OR CONCAT("TB-", LPAD(id, 5, "0")) = ?', [sponsor_id, sponsor_id]);
+                if (sponsor.length > 0) {
+                    await pool.execute(
+                        'INSERT INTO referrals (referrer_user_id, referred_user_id, referral_code) VALUES (?, ?, ?)',
+                        [sponsor[0].id, userId, sponsor_id]
+                    );
+
+                    // Send NEW_REFERRAL email to sponsor (non-blocking)
+                    sendEmail({
+                        email: sponsor[0].email,
+                        subject: '🎉 New Referral Joined Trade Balance',
+                        template: 'NEW_REFERRAL',
+                        name: sponsor[0].full_name,
+                        emailData: {
+                            referredName: full_name,
+                            joinedDate: new Date().toLocaleDateString()
+                        }
+                    }).catch(err => console.error('Failed to send referral email:', err));
+                }
+            } catch (e) {
+                console.error('Referral mapping error:', e);
+            }
         }
 
         // 6. Send Professional Welcome Email with OTP
@@ -314,7 +353,7 @@ const resetPassword = async (req, res) => {
 const getProfile = async (req, res) => {
     try {
         const [users] = await pool.execute(
-            'SELECT id, full_name, email, phone, telegram_id, role, sponsor_id, wallet_balance, created_at, last_login FROM users WHERE id = ?',
+            'SELECT id, full_name, email, phone, telegram_id, role, sponsor_id, referral_code, wallet_balance, created_at, last_login FROM users WHERE id = ?',
             [req.user.id]
         );
 
@@ -383,25 +422,37 @@ const preRegister = async (req, res) => {
         const otp = generateOtp();
         const otpExpiry = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours expiry for pre-registration password setup
 
+        let userId;
         if (existingUsers.length > 0) {
             const user = existingUsers[0];
             if (user.is_verified) {
                 return res.status(400).json({ message: 'This email is already registered and verified.' });
             }
             
+            userId = user.id;
             // If they registered before but are not verified/didn't set password, update their OTP
             await pool.execute(
                 'UPDATE users SET full_name = ?, otp = ?, otp_expiry = ? WHERE id = ?',
-                [full_name, otp, otpExpiry, user.id]
+                [full_name, otp, otpExpiry, userId]
             );
         } else {
             // Create user with a dummy/temporary password hash since password is NOT NULL in database schema
             const dummyPassword = await bcrypt.hash('PRELAUNCH_TEMP_PASS_' + Math.random().toString(36).slice(-8), 12);
-            await pool.execute(
+            const [result] = await pool.execute(
                 'INSERT INTO users (full_name, email, password, is_verified, role, sponsor_id, otp, otp_expiry) VALUES (?, ?, ?, FALSE, "user", "SYSTEM", ?, ?)',
                 [full_name, email, dummyPassword, otp, otpExpiry]
             );
+            userId = result.insertId;
         }
+
+        // Generate and update unique referral code
+        const randomString = Math.random().toString(36).substring(2, 5).toUpperCase();
+        const referralCode = `TB-${randomString}-${userId.toString().padStart(3, '0')}`;
+        
+        await pool.execute(
+            'UPDATE users SET referral_code = ?, referral_joined_at = CURRENT_TIMESTAMP WHERE id = ?',
+            [referralCode, userId]
+        );
 
         // 2. Send Pre-Register setup email to User
         console.log('Attempting to send pre-launch registration setup email to:', email);

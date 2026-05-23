@@ -37,8 +37,10 @@ async function runMigration() {
         await addColumnIfMissing('sponsor_id', 'VARCHAR(255)');
         await addColumnIfMissing('wallet_balance', 'DECIMAL(15,2) DEFAULT 0.00');
         await addColumnIfMissing('last_login', 'TIMESTAMP NULL');
+        await addColumnIfMissing('referral_code', 'VARCHAR(50) UNIQUE');
+        await addColumnIfMissing('referral_joined_at', 'TIMESTAMP NULL');
         
-        // 3. Ensure other tables exist (transactions, withdrawals, chat_messages)
+        // 3. Ensure other tables exist (transactions, withdrawals, chat_messages, referrals)
         await pool.query(`
             CREATE TABLE IF NOT EXISTS transactions (
                 id INT AUTO_INCREMENT PRIMARY KEY,
@@ -71,6 +73,19 @@ async function runMigration() {
                 receiver_id INT NOT NULL,
                 message TEXT NOT NULL,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        `);
+
+        await pool.query(`
+            CREATE TABLE IF NOT EXISTS referrals (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                referrer_user_id INT NOT NULL,
+                referred_user_id INT NOT NULL,
+                referral_code VARCHAR(50) NOT NULL,
+                status VARCHAR(20) DEFAULT 'Active',
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (referrer_user_id) REFERENCES users(id) ON DELETE CASCADE,
+                FOREIGN KEY (referred_user_id) REFERENCES users(id) ON DELETE CASCADE
             )
         `);
         
