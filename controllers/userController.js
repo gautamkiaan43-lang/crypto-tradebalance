@@ -26,21 +26,23 @@ const getUserProfile = async (req, res) => {
 // @access  Private
 const getUserStats = async (req, res) => {
     try {
-        const [userRows] = await pool.execute('SELECT id, referral_code, wallet_balance FROM users WHERE id = ?', [req.user.id]);
+        const [userRows] = await pool.execute('SELECT id, full_name, referral_code, wallet_balance FROM users WHERE id = ?', [req.user.id]);
         if (userRows.length === 0) return res.status(404).json({ message: 'User not found' });
         const user = userRows[0];
         
         const code1 = user.referral_code || '';
         const code2 = `TB-MEMBER-${user.id}`;
         const code3 = `TB-${user.id.toString().padStart(5, '0')}`;
+        const namePart = (user.full_name?.split(' ')[0] || '').replace(/[^a-zA-Z]/g, '').toUpperCase().substring(0, 6) || 'USER';
+        const code4 = `TB-${namePart}-${user.id.toString().padStart(3, '0')}`;
 
         const [referrals] = await pool.execute(
             `SELECT 
                 COUNT(*) as count,
                 SUM(CASE WHEN is_verified = 1 THEN 1 ELSE 0 END) as active_count
              FROM users 
-             WHERE sponsor_id IN (?, ?, ?)`,
-            [code1, code2, code3]
+             WHERE sponsor_id IN (?, ?, ?, ?)`,
+            [code1, code2, code3, code4]
         );
 
         res.json({
@@ -78,17 +80,19 @@ const getUserEarnings = async (req, res) => {
 };
 const getUserNetwork = async (req, res) => {
     try {
-        const [userRows] = await pool.execute('SELECT id, referral_code FROM users WHERE id = ?', [req.user.id]);
+        const [userRows] = await pool.execute('SELECT id, full_name, referral_code FROM users WHERE id = ?', [req.user.id]);
         if (userRows.length === 0) return res.status(404).json({ message: 'User not found' });
         const user = userRows[0];
         
         const code1 = user.referral_code || '';
         const code2 = `TB-MEMBER-${user.id}`;
         const code3 = `TB-${user.id.toString().padStart(5, '0')}`;
+        const namePart = (user.full_name?.split(' ')[0] || '').replace(/[^a-zA-Z]/g, '').toUpperCase().substring(0, 6) || 'USER';
+        const code4 = `TB-${namePart}-${user.id.toString().padStart(3, '0')}`;
 
         const [referrals] = await pool.execute(
-            'SELECT id, full_name, email, is_verified, created_at FROM users WHERE sponsor_id IN (?, ?, ?) ORDER BY created_at DESC',
-            [code1, code2, code3]
+            'SELECT id, full_name, email, is_verified, created_at FROM users WHERE sponsor_id IN (?, ?, ?, ?) ORDER BY created_at DESC',
+            [code1, code2, code3, code4]
         );
         res.json(referrals);
     } catch (error) {

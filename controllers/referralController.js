@@ -34,11 +34,13 @@ const validateReferralCode = async (req, res) => {
 // @access  Private
 const getReferralStats = async (req, res) => {
     try {
-        const [userRows] = await pool.execute('SELECT id, referral_code FROM users WHERE id = ?', [req.user.id]);
+        const [userRows] = await pool.execute('SELECT id, full_name, referral_code FROM users WHERE id = ?', [req.user.id]);
         const user = userRows[0];
         const code1 = user.referral_code || '';
         const code2 = `TB-MEMBER-${user.id}`;
         const code3 = `TB-${user.id.toString().padStart(5, '0')}`;
+        const namePart = (user.full_name?.split(' ')[0] || '').replace(/[^a-zA-Z]/g, '').toUpperCase().substring(0, 6) || 'USER';
+        const code4 = `TB-${namePart}-${user.id.toString().padStart(3, '0')}`;
 
         // Get stats counts
         const [counts] = await pool.execute(
@@ -46,8 +48,8 @@ const getReferralStats = async (req, res) => {
                 COUNT(*) as total_referrals,
                 SUM(CASE WHEN is_verified = 1 THEN 1 ELSE 0 END) as active_referrals
              FROM users
-             WHERE sponsor_id IN (?, ?, ?)`,
-            [code1, code2, code3]
+             WHERE sponsor_id IN (?, ?, ?, ?)`,
+            [code1, code2, code3, code4]
         );
 
         // Get full members list
@@ -62,9 +64,9 @@ const getReferralStats = async (req, res) => {
                 IF(is_verified, 'Active', 'Pending') as status,
                 created_at as referred_at
              FROM users
-             WHERE sponsor_id IN (?, ?, ?)
+             WHERE sponsor_id IN (?, ?, ?, ?)
              ORDER BY created_at DESC`,
-            [code1, code2, code3]
+            [code1, code2, code3, code4]
         );
 
         const totalReferrals = Number(counts[0].total_referrals) || 0;
@@ -88,18 +90,20 @@ const getReferralStats = async (req, res) => {
 // @access  Private
 const getMyNetwork = async (req, res) => {
     try {
-        const [userRows] = await pool.execute('SELECT id, referral_code FROM users WHERE id = ?', [req.user.id]);
+        const [userRows] = await pool.execute('SELECT id, full_name, referral_code FROM users WHERE id = ?', [req.user.id]);
         const user = userRows[0];
         const code1 = user.referral_code || '';
         const code2 = `TB-MEMBER-${user.id}`;
         const code3 = `TB-${user.id.toString().padStart(5, '0')}`;
+        const namePart = (user.full_name?.split(' ')[0] || '').replace(/[^a-zA-Z]/g, '').toUpperCase().substring(0, 6) || 'USER';
+        const code4 = `TB-${namePart}-${user.id.toString().padStart(3, '0')}`;
 
         const [network] = await pool.execute(`
             SELECT id, full_name, email, referral_code, is_verified, IF(is_verified, 'Active', 'Pending') as status, created_at
             FROM users
-            WHERE sponsor_id IN (?, ?, ?)
+            WHERE sponsor_id IN (?, ?, ?, ?)
             ORDER BY created_at DESC
-        `, [code1, code2, code3]);
+        `, [code1, code2, code3, code4]);
 
         res.json(network);
     } catch (error) {
