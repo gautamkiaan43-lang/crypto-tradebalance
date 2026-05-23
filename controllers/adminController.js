@@ -146,10 +146,10 @@ const getNetworkTree = async (req, res) => {
         let rootUser = null;
 
         if (search) {
-            // Find user by TB-ID or Name
+            // Find user by TB-ID or Name or Email
             const [users] = await pool.execute(
-                "SELECT id, full_name, email, is_verified, created_at, status, referral_code FROM users WHERE full_name LIKE ? OR referral_code = ? OR CONCAT('TB-', LPAD(id, 5, '0')) = ? OR CONCAT('TB-MEMBER-', id) = ? OR id = ?",
-                [`%${search}%`, search, search, search, search]
+                "SELECT id, full_name, email, is_verified, created_at, status, referral_code FROM users WHERE full_name LIKE ? OR email LIKE ? OR referral_code = ? OR CONCAT('TB-', LPAD(id, 5, '0')) = ? OR CONCAT('TB-MEMBER-', id) = ? OR id = ?",
+                [`%${search}%`, `%${search}%`, search, search, search, search]
             );
             if (users.length > 0) {
                 rootUser = users[0];
