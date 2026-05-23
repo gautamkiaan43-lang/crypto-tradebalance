@@ -61,7 +61,7 @@ const getReferralStats = async (req, res) => {
 const getMyNetwork = async (req, res) => {
     try {
         const [network] = await pool.execute(`
-            SELECT u.id, u.full_name, u.email, u.is_verified, r.status, r.created_at
+            SELECT u.id, u.full_name, u.email, u.referral_code, u.is_verified, r.status, r.created_at
             FROM referrals r
             JOIN users u ON r.referred_user_id = u.id
             WHERE r.referrer_user_id = ?
