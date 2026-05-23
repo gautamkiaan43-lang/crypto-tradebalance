@@ -173,7 +173,7 @@ const getNetworkTree = async (req, res) => {
              ].filter(Boolean);
         } else {
              // Global Level 1: users sponsored by the system itself
-             const [level1] = await pool.execute("SELECT id, full_name, referral_code FROM users WHERE sponsor_id IS NULL OR sponsor_id = '' OR sponsor_id = 'admin' OR sponsor_id = 'TB-00000' OR sponsor_id = 'SYSTEM'");
+             const [level1] = await pool.execute("SELECT id, full_name, email, is_verified, created_at, referral_code FROM users WHERE sponsor_id IS NULL OR sponsor_id = '' OR sponsor_id = 'admin' OR sponsor_id = 'TB-00000' OR sponsor_id = 'SYSTEM'");
              globalLevel1 = level1;
              currentLevelIds = level1.flatMap(u => {
                  const namePart = (u.full_name?.split(' ')[0] || '').replace(/[^a-zA-Z]/g, '').toUpperCase().substring(0, 6) || 'USER';
@@ -199,7 +199,7 @@ const getNetworkTree = async (req, res) => {
                 if (currentLevelIds.length > 0) {
                     const placeholders = currentLevelIds.map(() => '?').join(',');
                     const [res] = await pool.execute(
-                        `SELECT id, full_name, referral_code FROM users WHERE sponsor_id IN (${placeholders})`,
+                        `SELECT id, full_name, email, is_verified, created_at, referral_code FROM users WHERE sponsor_id IN (${placeholders})`,
                         currentLevelIds
                     );
                     referrals = res;
@@ -209,7 +209,14 @@ const getNetworkTree = async (req, res) => {
             levels.push({
                 level: i,
                 count: referrals.length,
-                growth: referrals.length > 0 ? "+Active" : "+0%"
+                growth: referrals.length > 0 ? "+Active" : "+0%",
+                users: referrals.map(u => ({
+                    id: u.id,
+                    full_name: u.full_name,
+                    email: u.email,
+                    status: u.is_verified ? 'Active' : 'Pending',
+                    created_at: u.created_at
+                }))
             });
 
             currentLevelIds = referrals.flatMap(u => {
