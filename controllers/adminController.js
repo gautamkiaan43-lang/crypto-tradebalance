@@ -163,22 +163,28 @@ const getNetworkTree = async (req, res) => {
         let globalLevel1 = [];
 
         if (rootUser) {
+             const namePart = (rootUser.full_name?.split(' ')[0] || '').replace(/[^a-zA-Z]/g, '').toUpperCase().substring(0, 6) || 'USER';
              currentLevelIds = [
                  `TB-${rootUser.id.toString().padStart(5, '0')}`,
                  rootUser.id.toString(),
                  `TB-MEMBER-${rootUser.id}`,
-                 rootUser.referral_code
+                 rootUser.referral_code,
+                 `TB-${namePart}-${rootUser.id.toString().padStart(3, '0')}`
              ].filter(Boolean);
         } else {
              // Global Level 1: users sponsored by the system itself
-             const [level1] = await pool.execute("SELECT id, referral_code FROM users WHERE sponsor_id IS NULL OR sponsor_id = '' OR sponsor_id = 'admin' OR sponsor_id = 'TB-00000' OR sponsor_id = 'SYSTEM'");
+             const [level1] = await pool.execute("SELECT id, full_name, referral_code FROM users WHERE sponsor_id IS NULL OR sponsor_id = '' OR sponsor_id = 'admin' OR sponsor_id = 'TB-00000' OR sponsor_id = 'SYSTEM'");
              globalLevel1 = level1;
-             currentLevelIds = level1.flatMap(u => [
-                 `TB-${u.id.toString().padStart(5, '0')}`,
-                 u.id.toString(),
-                 `TB-MEMBER-${u.id}`,
-                 u.referral_code
-             ].filter(Boolean));
+             currentLevelIds = level1.flatMap(u => {
+                 const namePart = (u.full_name?.split(' ')[0] || '').replace(/[^a-zA-Z]/g, '').toUpperCase().substring(0, 6) || 'USER';
+                 return [
+                     `TB-${u.id.toString().padStart(5, '0')}`,
+                     u.id.toString(),
+                     `TB-MEMBER-${u.id}`,
+                     u.referral_code,
+                     `TB-${namePart}-${u.id.toString().padStart(3, '0')}`
+                 ].filter(Boolean);
+             });
         }
 
         const levels = [];
@@ -193,7 +199,7 @@ const getNetworkTree = async (req, res) => {
                 if (currentLevelIds.length > 0) {
                     const placeholders = currentLevelIds.map(() => '?').join(',');
                     const [res] = await pool.execute(
-                        `SELECT id FROM users WHERE sponsor_id IN (${placeholders})`,
+                        `SELECT id, full_name, referral_code FROM users WHERE sponsor_id IN (${placeholders})`,
                         currentLevelIds
                     );
                     referrals = res;
@@ -206,20 +212,41 @@ const getNetworkTree = async (req, res) => {
                 growth: referrals.length > 0 ? "+Active" : "+0%"
             });
 
-            currentLevelIds = referrals.flatMap(u => [
-                 `TB-${u.id.toString().padStart(5, '0')}`,
-                 u.id.toString(),
-                 `TB-MEMBER-${u.id}`
-            ]);
+            currentLevelIds = referrals.flatMap(u => {
+                 const namePart = (u.full_name?.split(' ')[0] || '').replace(/[^a-zA-Z]/g, '').toUpperCase().substring(0, 6) || 'USER';
+                 return [
+                     `TB-${u.id.toString().padStart(5, '0')}`,
+                     u.id.toString(),
+                     `TB-MEMBER-${u.id}`,
+                     u.referral_code,
+                     `TB-${namePart}-${u.id.toString().padStart(3, '0')}`
+                 ].filter(Boolean);
+            });
         }
+
+        // Detect real anomalies (users who have a sponsor_id that doesn't exist)
+        const [orphanNodes] = await pool.execute(`
+            SELECT u1.id, u1.sponsor_id 
+            FROM users u1 
+            LEFT JOIN users u2 ON 
+                u1.sponsor_id = u2.referral_code OR 
+                u1.sponsor_id = CONCAT('TB-MEMBER-', u2.id) OR 
+                u1.sponsor_id = CONCAT('TB-', LPAD(u2.id, 5, '0')) OR
+                u1.sponsor_id = CONCAT('TB-', SUBSTRING(UPPER(REGEXP_REPLACE(u2.full_name, '[^a-zA-Z]', '')), 1, 6), '-', LPAD(u2.id, 3, '0'))
+            WHERE u1.sponsor_id IS NOT NULL 
+            AND u1.sponsor_id != '' 
+            AND u1.sponsor_id != 'SYSTEM' 
+            AND u1.sponsor_id != 'admin' 
+            AND u2.id IS NULL
+            LIMIT 5
+        `);
+
+        const anomalies = orphanNodes.map(o => `TB-${o.id.toString().padStart(5, '0')}: Orphan node recovery required (Sponsor ${o.sponsor_id} missing)`);
 
         res.json({
             rootUser,
             levels,
-            anomalies: [
-               "TB-10058: Pass-up mismatch detected",
-               "TB-10291: Orphan node recovery required"
-            ]
+            anomalies: anomalies.length > 0 ? anomalies : ["Network perfectly intact. No anomalies detected."]
         });
 
     } catch (error) {
