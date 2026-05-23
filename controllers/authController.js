@@ -51,8 +51,8 @@ const register = async (req, res) => {
         }
 
         // Generate and update unique referral code
-        const randomString = Math.random().toString(36).substring(2, 5).toUpperCase();
-        const referralCode = `TB-${randomString}-${userId.toString().padStart(3, '0')}`;
+        const namePart = (full_name.split(' ')[0] || '').replace(/[^a-zA-Z]/g, '').toUpperCase().substring(0, 6) || 'USER';
+        const referralCode = `TB-${namePart}-${userId.toString().padStart(3, '0')}`;
         
         await pool.execute(
             'UPDATE users SET referral_code = ?, referral_joined_at = CURRENT_TIMESTAMP WHERE id = ?',
@@ -446,8 +446,8 @@ const preRegister = async (req, res) => {
         }
 
         // Generate and update unique referral code
-        const randomString = Math.random().toString(36).substring(2, 5).toUpperCase();
-        const referralCode = `TB-${randomString}-${userId.toString().padStart(3, '0')}`;
+        const namePart = (full_name.split(' ')[0] || '').replace(/[^a-zA-Z]/g, '').toUpperCase().substring(0, 6) || 'USER';
+        const referralCode = `TB-${namePart}-${userId.toString().padStart(3, '0')}`;
         
         await pool.execute(
             'UPDATE users SET referral_code = ?, referral_joined_at = CURRENT_TIMESTAMP WHERE id = ?',
