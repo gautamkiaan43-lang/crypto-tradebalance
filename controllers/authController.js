@@ -62,7 +62,7 @@ const register = async (req, res) => {
         // Map into referrals table if sponsor_id is valid and not SYSTEM
         if (sponsor_id && sponsor_id !== 'SYSTEM') {
             try {
-                const [sponsor] = await pool.execute('SELECT id, full_name, email FROM users WHERE referral_code = ? OR CONCAT("TB-", LPAD(id, 5, "0")) = ?', [sponsor_id, sponsor_id]);
+                const [sponsor] = await pool.execute('SELECT id, full_name, email FROM users WHERE referral_code = ? OR CONCAT("TB-MEMBER-", id) = ? OR CONCAT("TB-", LPAD(id, 5, "0")) = ?', [sponsor_id, sponsor_id, sponsor_id]);
                 if (sponsor.length > 0) {
                     await pool.execute(
                         'INSERT INTO referrals (referrer_user_id, referred_user_id, referral_code) VALUES (?, ?, ?)',

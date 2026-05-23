@@ -148,8 +148,8 @@ const getNetworkTree = async (req, res) => {
         if (search) {
             // Find user by TB-ID or Name
             const [users] = await pool.execute(
-                "SELECT id, full_name, email, is_verified, created_at, status FROM users WHERE full_name LIKE ? OR CONCAT('TB-', LPAD(id, 5, '0')) = ? OR CONCAT('TB-MEMBER-', id) = ? OR id = ?",
-                [`%${search}%`, search, search, search]
+                "SELECT id, full_name, email, is_verified, created_at, status, referral_code FROM users WHERE full_name LIKE ? OR referral_code = ? OR CONCAT('TB-', LPAD(id, 5, '0')) = ? OR CONCAT('TB-MEMBER-', id) = ? OR id = ?",
+                [`%${search}%`, search, search, search, search]
             );
             if (users.length > 0) {
                 rootUser = users[0];
@@ -166,17 +166,19 @@ const getNetworkTree = async (req, res) => {
              currentLevelIds = [
                  `TB-${rootUser.id.toString().padStart(5, '0')}`,
                  rootUser.id.toString(),
-                 `TB-MEMBER-${rootUser.id}`
-             ];
+                 `TB-MEMBER-${rootUser.id}`,
+                 rootUser.referral_code
+             ].filter(Boolean);
         } else {
              // Global Level 1: users sponsored by the system itself
-             const [level1] = await pool.execute("SELECT id FROM users WHERE sponsor_id IS NULL OR sponsor_id = '' OR sponsor_id = 'admin' OR sponsor_id = 'TB-00000' OR sponsor_id = 'SYSTEM'");
+             const [level1] = await pool.execute("SELECT id, referral_code FROM users WHERE sponsor_id IS NULL OR sponsor_id = '' OR sponsor_id = 'admin' OR sponsor_id = 'TB-00000' OR sponsor_id = 'SYSTEM'");
              globalLevel1 = level1;
              currentLevelIds = level1.flatMap(u => [
                  `TB-${u.id.toString().padStart(5, '0')}`,
                  u.id.toString(),
-                 `TB-MEMBER-${u.id}`
-             ]);
+                 `TB-MEMBER-${u.id}`,
+                 u.referral_code
+             ].filter(Boolean));
         }
 
         const levels = [];
