@@ -34,20 +34,44 @@ const validateReferralCode = async (req, res) => {
 // @access  Private
 const getReferralStats = async (req, res) => {
     try {
-        const [referrals] = await pool.execute(
-            'SELECT COUNT(*) as total_referrals, SUM(CASE WHEN status = "Active" THEN 1 ELSE 0 END) as active_referrals FROM referrals WHERE referrer_user_id = ?',
+        // Get stats counts
+        const [counts] = await pool.execute(
+            `SELECT 
+                COUNT(*) as total_referrals,
+                SUM(CASE WHEN u.is_verified = 1 THEN 1 ELSE 0 END) as active_referrals
+             FROM referrals r
+             JOIN users u ON r.referred_user_id = u.id
+             WHERE r.referrer_user_id = ?`,
             [req.user.id]
         );
 
-        // Calculate earnings if applicable (can be customized later)
-        const totalReferrals = referrals[0].total_referrals || 0;
-        const activeReferrals = referrals[0].active_referrals || 0;
-        const totalEarnings = activeReferrals * 10; // example logic: 10 per active user
+        // Get full members list
+        const [members] = await pool.execute(
+            `SELECT 
+                u.id,
+                u.full_name,
+                u.email,
+                u.referral_code,
+                u.is_verified,
+                u.created_at as joined_at,
+                r.status,
+                r.created_at as referred_at
+             FROM referrals r
+             JOIN users u ON r.referred_user_id = u.id
+             WHERE r.referrer_user_id = ?
+             ORDER BY r.created_at DESC`,
+            [req.user.id]
+        );
+
+        const totalReferrals = Number(counts[0].total_referrals) || 0;
+        const activeReferrals = Number(counts[0].active_referrals) || 0;
+        const totalEarnings = activeReferrals * 10; // $10 per active user
 
         res.json({
             totalReferrals,
             activeReferrals,
-            totalEarnings
+            totalEarnings,
+            members
         });
     } catch (error) {
         console.error('REFERRAL_STATS_ERROR:', error);
