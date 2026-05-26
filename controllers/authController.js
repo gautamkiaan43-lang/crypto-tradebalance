@@ -232,6 +232,13 @@ const login = async (req, res) => {
 
         const user = users[0];
 
+        // Security Check: Account Suspension
+        if (user.status === 'Suspended' || user.status === 'suspended') {
+            return res.status(403).json({ 
+                message: 'ACCOUNT_SUSPENDED' 
+            });
+        }
+
         // Security Check: Account Verification
         if (!user.is_verified) {
             return res.status(403).json({ 
